@@ -132,14 +132,62 @@
   </div>
 
   <div class="tab-bar">
-    <button class="tab active" onclick="switchTab('staff')">スタッフ → 上長</button>
+    <button class="tab active" onclick="switchTab('approval')">承認申請</button>
+    <button class="tab" onclick="switchTab('staff')">報告サポート</button>
     <button class="tab" onclick="switchTab('manager')">上長 → 社長</button>
     <button class="tab" onclick="switchTab('client')">担当 ↔ クライアント</button>
     <button class="tab" onclick="switchTab('hikitsugi')">引継ぎフォーム</button>
   </div>
 
+  <!-- ===== 承認申請 ===== -->
+  <div id="tab-approval" class="section active">
+    <div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#0C447C;line-height:1.7">
+      「こういう連絡が来ました。確認お願いします。」はNGです。<br>
+      受け取った連絡と<b>自分がどう動くつもりか</b>を入力して、承認申請文を作成しましょう。
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>受け取った連絡文 <span class="req">*</span></label>
+        <textarea id="ap-input" rows="5" placeholder="例）案件①において、○○から△△という連絡が来ました。"></textarea>
+      </div>
+    </div>
+
+    <div class="card" style="border:1.5px solid #378ADD">
+      <div style="font-size:12px;font-weight:700;color:#0C447C;margin-bottom:10px">ここが一番大事です。自分で考えてから入力してください。</div>
+      <div class="field">
+        <label>この状況で、自分はどう動こうと思っているか <span class="req">*</span>（空欄だと申請文を作れません）</label>
+        <textarea id="ap-action" rows="3" placeholder="例）○○という対応で△△までに進めようと思います。理由は〜だからです。"></textarea>
+      </div>
+      <div class="field">
+        <label>期限・スケジュール <span class="req">*</span>（空欄だと申請文を作れません）</label>
+        <input type="text" id="ap-deadline" placeholder="例）△△日までに○○を完了させる予定">
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>上長に判断・確認してほしいこと</label>
+        <textarea id="ap-question" rows="2" placeholder="例）この進め方で問題ないか確認をお願いしたいです。"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="g2">
+        <div class="field" style="margin-bottom:0">
+          <label>あなたの名前</label>
+          <input type="text" id="ap-name" placeholder="例）担当者①">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>申請先（上長名）</label>
+          <input type="text" id="ap-to" placeholder="例）上長①">
+        </div>
+      </div>
+    </div>
+
+    <button class="primary" id="ap-btn" onclick="runApproval()">承認申請文を生成する</button>
+    <div id="ap-result" style="display:none;margin-top:1rem"></div>
+  </div>
+
   <!-- スタッフ → 上長 -->
-  <div id="tab-staff" class="section active">
+  <div id="tab-staff" class="section">
     <div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#0C447C;line-height:1.6">
       上長に報告・相談する前にここで確認しましょう。「情報の横流し」になっていないか、自分の考えが入っているかをチェックします。
     </div>
@@ -266,7 +314,7 @@
 <script>
 const API_URL = '/api/claude';
 
-const TABS = ['staff','manager','client','hikitsugi'];
+const TABS = ['approval','staff','manager','client','hikitsugi'];
 
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -327,6 +375,71 @@ function copyText(id, btnId) {
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
   });
+}
+
+// ===== 承認申請 =====
+async function runApproval() {
+  const input = v('ap-input');
+  const action = v('ap-action');
+  const deadline = v('ap-deadline');
+  if (!input) { alert('受け取った連絡文を入力してください'); return; }
+  if (!action) {
+    alert('「自分がどう動くか」は必ず入力してください。\nここが空欄では承認申請になりません。');
+    document.getElementById('ap-action').focus();
+    return;
+  }
+  if (!deadline) {
+    alert('期限・スケジュールを入力してください。\n上長が判断するために必要な情報です。');
+    document.getElementById('ap-deadline').focus();
+    return;
+  }
+
+  setBtnLoading('ap-btn', true, '承認申請文を生成する');
+
+  const prompt = `あなたはWeb制作会社のベテランマネージャーです。スタッフが上長に承認申請をする場面をサポートしてください。
+
+【受け取った連絡】${input}
+【自分の動き・考え】${action}
+【期限・スケジュール】${deadline}
+【上長への確認事項】${v('ap-question') || 'なし'}
+【申請者】${v('ap-name') || '担当者'}
+【申請先】${v('ap-to') || '上長'}
+
+以下を生成してください：
+1. 承認申請文（「〜という対応で進めてよいですか？」という形式。自分の判断と動きが明確に入っていること。です・ます調・150〜200字）
+2. この申請文の良い点（担当者が自分で考えられている点を具体的に）
+3. もしあれば改善できる点（より良い申請にするためのアドバイス）
+
+JSON形式のみで返答（他の文字は一切不要）:
+{"approval":"承認申請文","good":["良い点（配列・最大3つ）"],"improve":["改善できる点（配列・なければ空配列）"]}`;
+
+  try {
+    const d = await callGemini(prompt);
+    const goodHTML = (d.good||[]).map(g => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #c0dd97;color:#3B6D11">◎ ${g}</div>`).join('');
+    const improveHTML = (d.improve||[]).length > 0
+      ? `<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;color:#633806;margin-bottom:4px">もっと良くできる点</div>${(d.improve||[]).map(i => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f5dbb3;color:#854F0B">△ ${i}</div>`).join('')}</div>` : '';
+
+    document.getElementById('ap-result').innerHTML = `
+      <div class="result-wrap">
+        <div class="result-top">
+          <div class="result-title">承認申請文</div>
+          <button class="copy-btn" id="ap-copy" onclick="copyText('ap-approval-text','ap-copy')">コピー</button>
+        </div>
+        <div class="result-body">
+          <textarea class="editable-result" id="ap-approval-text" rows="5">${d.approval||''}</textarea>
+        </div>
+      </div>
+      <div class="result-wrap" style="margin-top:10px">
+        <div class="result-top"><div class="result-title">フィードバック</div></div>
+        <div class="result-body">
+          ${goodHTML ? `<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#27500A;margin-bottom:4px">自分で考えられている点</div>${goodHTML}</div>` : ''}
+          ${improveHTML}
+        </div>
+      </div>`;
+    document.getElementById('ap-result').style.display = 'block';
+    document.getElementById('ap-result').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch(e) { alert('エラーが発生しました。\n' + e.message); }
+  setBtnLoading('ap-btn', false, '承認申請文を生成する');
 }
 
 // ===== スタッフ → 上長 =====
@@ -695,8 +808,8 @@ function addTask(p) {
           <input type="text" id="${id}-risk" placeholder="例）修正が複数回入る可能性あり">
         </div>
         <div>
-          <label>連絡がない場合の対応方針</label>
-          <input type="text" id="${id}-fallback" placeholder="例）16時までに連絡なければ前回データで進めてOK">
+          <label>連絡がない場合：いつまで待つか・その後どう動くか <span class="req">*</span></label>
+          <input type="text" id="${id}-fallback" placeholder="例）17時までに連絡なければ、本番化せず翌営業日に持ち越し">
         </div>
       </div>
     </div>`;
@@ -852,6 +965,8 @@ function hikitsugiGenerate() {
 
       if (!tName) warnings.push({ item: `案件「${pName||'未設定'}」課題：タスク名`, detail: '入力されていません' });
       if (!request) warnings.push({ item: `案件「${pName||'未設定'}」「${tName||'未設定'}」：⑤何をしてほしいか`, detail: '未入力です。引継ぎ先が何をすべきか明記してください' });
+      const fallbackVal = v(id + '-fallback');
+      if (!fallbackVal) warnings.push({ item: `案件「${pName||'未設定'}」「${tName||'未設定'}」：連絡がない場合の対応`, detail: '「いつまで待つか」「その後どう動くか」が未入力です。これがないと引継ぎ先が判断できません。' });
 
       tasks.push({
         name: tName, important: ck(id + '-important'),
