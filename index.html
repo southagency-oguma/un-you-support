@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自走くん</title>
+  <style>
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; font-size: 13px; }
+    .container { max-width: 860px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+    .header { margin-bottom: 1.5rem; }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header p { font-size: 12px; color: #888; margin-top: 3px; }
+
+    .tab-bar { display: flex; border-bottom: 2px solid #e0e0e0; margin-bottom: 1.5rem; gap: 4px; }
+    .tab { padding: 10px 20px; font-size: 13px; cursor: pointer; border: none; background: none; color: #888; border-bottom: 3px solid transparent; margin-bottom: -2px; font-weight: 600; font-family: inherit; border-radius: 8px 8px 0 0; }
+    .tab:hover { background: #f0f0ee; color: #555; }
+    .tab.active { color: #1a1a1a; border-bottom-color: #378ADD; background: #fff; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 1rem; margin-bottom: 10px; }
+    label { font-size: 11px; color: #777; display: block; margin-bottom: 3px; }
+    input[type=text], select, textarea { width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #1a1a1a; font-family: inherit; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #378ADD; }
+    textarea { resize: vertical; line-height: 1.6; }
+    .field { margin-bottom: 10px; }
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .req { color: #E24B4A; }
+
+    button { font-family: inherit; cursor: pointer; }
+    button.primary { background: #378ADD; color: #fff; border: none; padding: 11px 24px; border-radius: 8px; font-size: 14px; font-weight: 700; width: 100%; }
+    button.primary:hover { background: #185FA5; }
+    button.primary:disabled { background: #B5D4F4; cursor: not-allowed; }
+    button.copy-btn { background: #fff; border: 1px solid #ddd; padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #1a1a1a; }
+    button.copy-btn:hover { background: #f5f5f5; }
+    button.copy-btn.copied { background: #EAF3DE; border-color: #97C459; color: #27500A; }
+    button.option-btn { background: #fff; border: 1px solid #ddd; padding: 8px 14px; border-radius: 8px; font-size: 12px; color: #1a1a1a; text-align: left; width: 100%; margin-bottom: 6px; }
+    button.option-btn:hover { background: #f0f6ff; border-color: #378ADD; }
+    button.option-btn.selected { background: #E6F1FB; border-color: #378ADD; color: #0C447C; font-weight: 600; }
+
+    .result-wrap { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; overflow: hidden; margin-top: 1rem; }
+    .result-top { background: #f8f8f6; padding: 0.75rem 1rem; border-bottom: 1px solid #e8e8e8; display: flex; justify-content: space-between; align-items: center; }
+    .result-title { font-size: 13px; font-weight: 700; }
+    .result-body { padding: 1rem; }
+    .result-text { background: #f5f5f3; border-radius: 6px; padding: 1rem; font-size: 12px; line-height: 1.9; white-space: pre-wrap; color: #1a1a1a; font-family: inherit; }
+    .editable-result { width: 100%; font-size: 12px; line-height: 1.9; padding: 1rem; background: #f5f5f3; border: none; border-radius: 6px; color: #1a1a1a; font-family: inherit; resize: vertical; min-height: 140px; }
+    .editable-result:focus { outline: 1px solid #378ADD; }
+
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: sp 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+
+    .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+    .analysis-card { border-radius: 8px; padding: 10px 12px; }
+    .analysis-card.info { background: #E6F1FB; }
+    .analysis-card.warn { background: #FAEEDA; }
+    .analysis-card.ok { background: #EAF3DE; }
+    .analysis-card-label { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 4px; color: #444; }
+    .analysis-card.info .analysis-card-label { color: #0C447C; }
+    .analysis-card.warn .analysis-card-label { color: #633806; }
+    .analysis-card.ok .analysis-card-label { color: #27500A; }
+    .analysis-card-val { font-size: 12px; line-height: 1.5; color: #1a1a1a; }
+
+    .option-section { margin-top: 1rem; }
+    .option-label { font-size: 12px; font-weight: 700; color: #444; margin-bottom: 8px; }
+    .option-list { display: grid; gap: 6px; }
+    .option-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 14px; cursor: pointer; transition: all 0.1s; }
+    .option-card:hover { border-color: #378ADD; background: #f0f6ff; }
+    .option-card.selected { border-color: #378ADD; background: #E6F1FB; }
+    .option-tag { font-size: 10px; font-weight: 700; color: #378ADD; margin-bottom: 4px; }
+    .option-text { font-size: 12px; line-height: 1.6; color: #1a1a1a; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-info { background: #E6F1FB; color: #0C447C; }
+    .badge-ok { background: #EAF3DE; color: #27500A; }
+    .badge-warn { background: #FAEEDA; color: #633806; }
+
+    .divider { border: none; border-top: 1px solid #eee; margin: 1rem 0; }
+
+    @media (max-width: 640px) {
+      .g2, .analysis-grid { grid-template-columns: 1fr; }
+      .tab { padding: 10px 12px; font-size: 12px; }
+    }
+  
+
+    /* 引継ぎ固有スタイル */
+    .project-card { background: #fff; border: 2px solid #e0e0e0; border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+    .project-header { background: #f8f8f6; padding: 0.75rem 1rem; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; gap: 10px; }
+    .project-num { width: 22px; height: 22px; background: #378ADD; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .project-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; flex: 1; }
+    .project-body { padding: 1rem; }
+    .task-card { background: #fafafa; border: 1px solid #e4e4e4; border-radius: 8px; padding: 0.85rem; margin-bottom: 8px; }
+    .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .task-label { font-size: 12px; font-weight: 700; color: #333; }
+    .sec { margin-bottom: 10px; }
+    .sec-label { font-size: 10px; font-weight: 700; color: #378ADD; letter-spacing: 0.05em; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1.5px solid #E6F1FB; }
+    .importance-wrap { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff8f0; border: 1px solid #f5c4b3; border-radius: 6px; margin-bottom: 10px; }
+    .importance-wrap input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; accent-color: #D85A30; }
+    .importance-wrap label { font-size: 12px; color: #712B13; margin: 0; cursor: pointer; font-weight: 600; }
+    .deadline-wrap { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; align-items: end; }
+    .tbd-wrap { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; }
+    .tbd-wrap label { font-size: 12px; color: #1a1a1a; margin: 0; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .result-wrap { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; overflow: hidden; margin-top: 1.5rem; }
+    .result-top { background: #f8f8f6; padding: 0.85rem 1rem; border-bottom: 1px solid #e8e8e8; display: flex; justify-content: space-between; align-items: center; }
+    .result-text { background: #f5f5f3; border-radius: 6px; padding: 1rem; font-size: 12px; line-height: 1.9; white-space: pre-wrap; font-family: inherit; color: #1a1a1a; }
+    .warn-section { background: #FAEEDA; border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 10px; }
+    .warn-title { font-size: 12px; font-weight: 700; color: #633806; margin-bottom: 8px; }
+    .warn-item { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(186,117,23,0.15); font-size: 12px; }
+    .warn-item:last-child { border-bottom: none; }
+    .warn-badge { background: #EF9F27; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+    .ok-badge { background: #EAF3DE; color: #27500A; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    button.add-project { background: none; border: 2px dashed #bbb; padding: 10px; border-radius: 10px; font-size: 13px; color: #888; width: 100%; margin-bottom: 14px; font-weight: 500; font-family: inherit; cursor: pointer; }
+    button.add-project:hover { background: #f0f0ee; }
+    button.add-task { background: none; border: 1px dashed #ccc; padding: 6px; border-radius: 6px; font-size: 11px; color: #aaa; width: 100%; margin-bottom: 8px; font-family: inherit; cursor: pointer; }
+    button.add-task:hover { background: #f5f5f5; color: #666; }
+    button.del { background: none; border: 1px solid #e0e0e0; padding: 2px 8px; border-radius: 5px; font-size: 10px; color: #bbb; font-family: inherit; cursor: pointer; }
+    button.del:hover { background: #fff0f0; color: #c00; border-color: #f09595; }
+    button.del-proj { background: none; border: 1px solid #e0e0e0; padding: 4px 10px; border-radius: 6px; font-size: 11px; color: #bbb; white-space: nowrap; font-family: inherit; cursor: pointer; }
+    button.del-proj:hover { background: #fff0f0; color: #c00; border-color: #f09595; }
+    .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    @media (max-width: 640px) {
+      .project-fields, .g3, .deadline-wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>自走くん</h1>
+    <p>やりとりサポート ＆ 引継ぎフォーム</p>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab active" onclick="switchTab('staff')">スタッフ → 上長</button>
+    <button class="tab" onclick="switchTab('manager')">上長 → 社長</button>
+    <button class="tab" onclick="switchTab('client')">担当 ↔ クライアント</button>
+    <button class="tab" onclick="switchTab('hikitsugi')">引継ぎフォーム</button>
+  </div>
+
+  <!-- スタッフ → 上長 -->
+  <div id="tab-staff" class="section active">
+    <div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#0C447C;line-height:1.6">
+      上長に報告・相談する前にここで確認しましょう。「情報の横流し」になっていないか、自分の考えが入っているかをチェックします。
+    </div>
+    <div class="card">
+      <div class="field">
+        <label>何が起きたか・受け取った連絡の内容 <span class="req">*</span></label>
+        <textarea id="s-situation" rows="4" placeholder="例）モビイクスから5月以降のSNS運用をLINEのみに変更したいとの連絡が来ました。"></textarea>
+      </div>
+      <div class="field">
+        <label>自分はどう動こうと思っているか <span class="req">*</span></label>
+        <textarea id="s-action" rows="3" placeholder="例）LINE単体での見積もりを作成して16日までに先方に提出しようと思います。"></textarea>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>上長に何を確認・相談したいか</label>
+        <textarea id="s-question" rows="2" placeholder="例）見積もり金額の方向性を確認していただけますか？"></textarea>
+      </div>
+    </div>
+    <div class="card">
+      <div class="g2">
+        <div class="field" style="margin-bottom:0">
+          <label>あなたの名前</label>
+          <input type="text" id="s-name" placeholder="例）田中">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>報告先（上長名）</label>
+          <input type="text" id="s-to" placeholder="例）小熊さん">
+        </div>
+      </div>
+    </div>
+    <button class="primary" id="s-btn" onclick="runStaff()">報告文をチェック・生成する</button>
+    <div id="s-result" style="display:none;margin-top:1rem"></div>
+  </div>
+
+  <!-- 上長 → 社長 -->
+  <div id="tab-manager" class="section">
+    <div style="background:#EAF3DE;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#27500A;line-height:1.6">
+      社長への報告内容を整理します。何をどの粒度で報告すべきか迷ったときに使ってください。
+    </div>
+    <div class="card">
+      <div class="field">
+        <label>報告したい内容・起きていること <span class="req">*</span></label>
+        <textarea id="m-situation" rows="4" placeholder="例）今月の売上が予算比80%で着地しそう。主因はAKIND案件の受注が遅れたこと。来月は病院案件の入金が見込まれる。"></textarea>
+      </div>
+      <div class="field">
+        <label>自分としての見立て・対策</label>
+        <textarea id="m-action" rows="3" placeholder="例）来月の数字は回復見込みのため、今月単月の遅れとして処理できると判断しています。"></textarea>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>社長に判断・相談してほしいこと</label>
+        <textarea id="m-question" rows="2" placeholder="例）採用の進め方について相談したいです。"></textarea>
+      </div>
+    </div>
+    <div class="card">
+      <div class="g2">
+        <div class="field" style="margin-bottom:0">
+          <label>報告者名</label>
+          <input type="text" id="m-name" placeholder="例）小熊">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>報告の種類</label>
+          <select id="m-type">
+            <option>週次報告</option>
+            <option>月次報告</option>
+            <option>案件報告</option>
+            <option>緊急報告</option>
+            <option>相談</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button class="primary" id="m-btn" onclick="runManager()">社長への報告文を生成する</button>
+    <div id="m-result" style="display:none;margin-top:1rem"></div>
+  </div>
+
+  <!-- 担当 ↔ クライアント -->
+  <div id="tab-client" class="section">
+    <div style="background:#FAEEDA;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#633806;line-height:1.6">
+      クライアントからの連絡を貼り付けると、内容を整理して返し方の選択肢を複数提示します。
+    </div>
+    <div class="card">
+      <div class="field">
+        <label>クライアントからの連絡文 <span class="req">*</span></label>
+        <textarea id="c-input" rows="6" placeholder="例）お世話になっております。先日ご提案いただいたLPの件ですが、予算の関係で一部修正をお願いしたいと思います。"></textarea>
+      </div>
+      <div class="g2">
+        <div class="field" style="margin-bottom:0">
+          <label>クライアント名・案件名</label>
+          <input type="text" id="c-client" placeholder="例）モビイクス / LP制作">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>現在の状況・背景</label>
+          <input type="text" id="c-context" placeholder="例）先週提案済み、社内確認待ちだった">
+        </div>
+      </div>
+    </div>
+    <button class="primary" id="c-btn" onclick="runClient()">内容を分析して返し方を提案する</button>
+    <div id="c-result" style="display:none;margin-top:1rem"></div>
+  </div>
+
+  <!-- 引継ぎフォーム -->
+  <div id="tab-hikitsugi" class="section">
+    <div style="background:#f5f5f3;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#666;line-height:1.6">
+      フォームに入力してボタンを押すとSlackに貼れる引継ぎ文が生成されます
+    </div>
+    <div class="card">
+      <div class="g2">
+        <div class="field" style="margin-bottom:0">
+          <label>引継ぎ者名 <span class="req">*</span></label>
+          <input type="text" id="hk-from" placeholder="例）田中">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>引継ぎ日</label>
+          <input type="date" id="hk-date">
+        </div>
+      </div>
+    </div>
+    <div id="project-list"></div>
+    <button class="add-project" onclick="addProject()">＋ 案件を追加</button>
+    <button class="primary" onclick="hikitsugiGenerate()">引継ぎ文を生成する</button>
+    <div id="result-area" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const API_URL = '/api/claude';
+
+const TABS = ['staff','manager','client','hikitsugi'];
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  TABS.forEach((n,i) => {
+    if(n===name){
+      document.querySelectorAll('.tab')[i].classList.add('active');
+      document.getElementById('tab-'+n).classList.add('active');
+    }
+  });
+}
+
+const v = id => (document.getElementById(id)?.value || '').trim();
+const radio = name => document.querySelector(`input[name="${name}"]:checked`)?.value || '';
+const ck = id => document.getElementById(id)?.checked || false;
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtDate(val) {
+  if (!val) return '';
+  const d = new Date(val + 'T00:00:00');
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function callGemini(prompt) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt })
+  });
+  if (!res.ok) throw new Error('API error: ' + res.status);
+  const d = await res.json();
+  return d.result;
+}
+
+function setBtnLoading(id, loading, defaultLabel, retrying = false) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.disabled = loading;
+  if (!loading) {
+    btn.innerHTML = defaultLabel;
+  } else if (retrying) {
+    btn.innerHTML = '<span class="spin"></span>制限中のため再試行中...';
+  } else {
+    btn.innerHTML = '<span class="spin"></span>AI分析中...';
+  }
+}
+
+function copyText(id, btnId) {
+  const el = document.getElementById(id);
+  const text = el.tagName === 'TEXTAREA' ? el.value : el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    const orig = btn.textContent;
+    btn.textContent = 'コピーしました！';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ===== スタッフ → 上長 =====
+async function runStaff() {
+  const situation = v('s-situation'), action = v('s-action');
+  if (!situation) { alert('何が起きたかを入力してください'); return; }
+  if (!action) { alert('自分の動きを入力してください'); return; }
+  setBtnLoading('s-btn', true, '報告文をチェック・生成する');
+  const prompt = `あなたはWeb制作会社のベテランマネージャーです。以下のスタッフからの報告内容を分析し、上長への報告文を生成してください。
+
+【状況・受け取った連絡】${situation}
+【自分の動き・考え】${action}
+【上長への相談・確認事項】${v('s-question') || 'なし'}
+【報告者】${v('s-name') || 'スタッフ'}
+【報告先】${v('s-to') || '上長'}
+
+JSON形式のみで返答:
+{"score":"自走度スコア0-100の整数","score_comment":"スコアの理由1文","missing":["不足している視点（配列）"],"good":["良い点（配列）"],"report":"改善した報告文です・ます調200字","advice":"アドバイス1〜2文"}`;
+  try {
+    const d = await callGemini(prompt);
+    const score = parseInt(d.score)||0;
+    const scoreColor = score>=70?'#27500A':score>=40?'#633806':'#791F1F';
+    const scoreBg = score>=70?'#EAF3DE':score>=40?'#FAEEDA':'#FCEBEB';
+    const scoreLabel = score>=70?'自走できています':score>=40?'もう少し自分の考えを':'情報の横流しになっています';
+    const missingHTML = (d.missing||[]).length>0?`<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#633806;margin-bottom:6px">不足している視点</div>${(d.missing||[]).map(m=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f5dbb3;color:#854F0B">・${m}</div>`).join('')}</div>`:'';
+    const goodHTML = (d.good||[]).length>0?`<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#27500A;margin-bottom:6px">良い点</div>${(d.good||[]).map(g=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #c0dd97;color:#3B6D11">・${g}</div>`).join('')}</div>`:'';
+    document.getElementById('s-result').innerHTML = `
+      <div class="result-wrap"><div class="result-top"><div class="result-title">自走度チェック結果</div></div>
+      <div class="result-body">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;padding:12px;background:${scoreBg};border-radius:8px">
+          <div style="font-size:36px;font-weight:700;color:${scoreColor}">${score}</div>
+          <div><div style="font-size:11px;color:${scoreColor};font-weight:700">自走度スコア / 100</div>
+          <div style="font-size:13px;font-weight:700;color:${scoreColor};margin-top:2px">${scoreLabel}</div>
+          <div style="font-size:12px;color:#666;margin-top:2px">${d.score_comment||''}</div></div>
+        </div>
+        ${missingHTML}${goodHTML}
+      </div></div>
+      <div class="result-wrap" style="margin-top:10px">
+        <div class="result-top"><div class="result-title">改善した報告文</div>
+        <button class="copy-btn" id="s-copy" onclick="copyText('s-report-text','s-copy')">コピー</button></div>
+        <div class="result-body">
+          <textarea class="editable-result" id="s-report-text">${d.report||''}</textarea>
+          <div style="margin-top:8px;padding:10px;background:#f5f5f3;border-radius:6px;font-size:12px;color:#666"><b style="color:#333">アドバイス：</b>${d.advice||''}</div>
+        </div>
+      </div>`;
+    document.getElementById('s-result').style.display='block';
+    document.getElementById('s-result').scrollIntoView({behavior:'smooth',block:'start'});
+  } catch(e) { alert('エラーが発生しました。APIキーを確認してください。\n'+e.message); }
+  setBtnLoading('s-btn', false, '報告文をチェック・生成する');
+}
+
+// ===== 上長 → 社長 =====
+async function runManager() {
+  const situation = v('m-situation');
+  if (!situation) { alert('報告内容を入力してください'); return; }
+  setBtnLoading('m-btn', true, '社長への報告文を生成する');
+  const prompt = `あなたは経営者の秘書兼アドバイザーです。以下の内容をもとに社長への報告文を生成してください。
+
+【報告内容】${situation}
+【見立て・対策】${v('m-action')||'なし'}
+【社長への相談】${v('m-question')||'なし'}
+【報告者】${v('m-name')||'上長'}　【種類】${v('m-type')||'報告'}
+
+JSON形式のみで返答:
+{"need_to_report":["必ず報告する項目"],"optional":["状況次第で報告"],"skip":["社長には不要な粒度"],"report":"社長への報告文です・ます調200〜300字","point":"社長が気にするポイント1文"}`;
+  try {
+    const d = await callGemini(prompt);
+    const needHTML = (d.need_to_report||[]).map(i=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #9FE1CB;color:#085041">・${i}</div>`).join('');
+    const optHTML = (d.optional||[]).map(i=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #e0e0e0;color:#666">・${i}</div>`).join('');
+    const skipHTML = (d.skip||[]).map(i=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f5dbb3;color:#854F0B">・${i}</div>`).join('');
+    document.getElementById('m-result').innerHTML = `
+      <div class="result-wrap"><div class="result-top"><div class="result-title">報告粒度の整理</div></div>
+      <div class="result-body">
+        ${needHTML?`<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#085041;margin-bottom:4px">必ず報告する</div>${needHTML}</div>`:''}
+        ${optHTML?`<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#666;margin-bottom:4px">状況次第で報告</div>${optHTML}</div>`:''}
+        ${skipHTML?`<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#854F0B;margin-bottom:4px">社長には不要な粒度</div>${skipHTML}</div>`:''}
+        ${d.point?`<div style="padding:10px;background:#FAEEDA;border-radius:6px;font-size:12px;color:#633806"><b>社長が気にするポイント：</b>${d.point}</div>`:''}
+      </div></div>
+      <div class="result-wrap" style="margin-top:10px">
+        <div class="result-top"><div class="result-title">社長への報告文</div>
+        <button class="copy-btn" id="m-copy" onclick="copyText('m-report-text','m-copy')">コピー</button></div>
+        <div class="result-body"><textarea class="editable-result" id="m-report-text">${d.report||''}</textarea></div>
+      </div>`;
+    document.getElementById('m-result').style.display='block';
+    document.getElementById('m-result').scrollIntoView({behavior:'smooth',block:'start'});
+  } catch(e) { alert('エラーが発生しました。\n'+e.message); }
+  setBtnLoading('m-btn', false, '社長への報告文を生成する');
+}
+
+// ===== 担当 ↔ クライアント =====
+async function runClient() {
+  const input = v('c-input');
+  if (!input) { alert('連絡文を入力してください'); return; }
+  setBtnLoading('c-btn', true, '内容を分析して返し方を提案する');
+  const prompt = `あなたはWeb制作会社のベテランディレクターです。クライアントからの連絡を分析し返し方を3つ提案してください。
+
+【連絡文】${input}
+【クライアント・案件】${v('c-client')||'不明'}
+【背景】${v('c-context')||'不明'}
+
+JSON形式のみで返答:
+{"summary":"要点2〜3文","intent":"真の意図・感情1文","caution":"注意点1文","options":[{"label":"選択肢ラベル","merit":"メリット","demerit":"リスク","reply":"返信文です・ます調"},{},{}]}`;
+  try {
+    const d = await callGemini(prompt);
+    const optionsHTML = (d.options||[]).map((opt,i)=>`
+      <div class="option-card" id="opt-${i}" onclick="selectOption(${i})">
+        <div class="option-tag">選択肢 ${i+1}：${opt.label||''}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
+          <div style="font-size:11px;color:#27500A">◎ ${opt.merit||''}</div>
+          <div style="font-size:11px;color:#A32D2D">▲ ${opt.demerit||''}</div>
+        </div>
+      </div>`).join('');
+    window._clientOptions = d.options||[];
+    document.getElementById('c-result').innerHTML = `
+      <div class="result-wrap"><div class="result-top"><div class="result-title">連絡内容の分析</div></div>
+      <div class="result-body">
+        <div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#444;margin-bottom:4px">要点</div>
+        <div style="font-size:12px;line-height:1.7">${d.summary||''}</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:#E6F1FB;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;font-weight:700;color:#0C447C;margin-bottom:3px">真の意図・感情</div>
+            <div style="font-size:12px;color:#185FA5">${d.intent||''}</div>
+          </div>
+          <div style="background:#FAEEDA;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;font-weight:700;color:#633806;margin-bottom:3px">対応時の注意点</div>
+            <div style="font-size:12px;color:#854F0B">${d.caution||''}</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="result-wrap" style="margin-top:10px">
+        <div class="result-top"><div class="result-title">返し方の選択肢（タップして選ぶ）</div></div>
+        <div class="result-body">
+          <div style="display:grid;gap:6px;margin-bottom:1rem">${optionsHTML}</div>
+          <div id="reply-area" style="display:none">
+            <hr style="border:none;border-top:1px solid #eee;margin:1rem 0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <div style="font-size:12px;font-weight:700">返信文（編集してそのまま送れます）</div>
+              <button class="copy-btn" id="c-copy" onclick="copyText('c-reply-text','c-copy')">コピー</button>
+            </div>
+            <textarea class="editable-result" id="c-reply-text" rows="6"></textarea>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('c-result').style.display='block';
+    document.getElementById('c-result').scrollIntoView({behavior:'smooth',block:'start'});
+  } catch(e) { alert('エラーが発生しました。\n'+e.message); }
+  setBtnLoading('c-btn', false, '内容を分析して返し方を提案する');
+}
+
+function selectOption(idx) {
+  document.querySelectorAll('.option-card').forEach((el,i)=>el.classList.toggle('selected',i===idx));
+  const opt = window._clientOptions?.[idx];
+  if(opt){
+    document.getElementById('c-reply-text').value=opt.reply||'';
+    document.getElementById('reply-area').style.display='block';
+    document.getElementById('reply-area').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+
+// ===== 引継ぎフォーム =====
+
+let pCount = 0, tCounts = {}, pageCounts = {};
+
+function addProject() {
+  pCount++;
+  const p = pCount;
+  tCounts[p] = 0;
+  const div = document.createElement('div');
+  div.className = 'project-card';
+  div.id = 'project-' + p;
+  div.innerHTML = `
+    <div class="project-header">
+      <div class="project-num">${p}</div>
+      <div class="project-fields">
+        <div>
+          <label>案件名 <span class="req">*</span></label>
+          <input type="text" id="p${p}-name" placeholder="例）浦和レッズ LP制作">
+        </div>
+        <div>
+          <label>引継ぎ先 <span class="req">*</span></label>
+          <input type="text" id="p${p}-to" placeholder="例）佐藤">
+        </div>
+        <div>
+          <label>引継ぎ理由</label>
+          <input type="text" id="p${p}-reason" placeholder="例）午前休のため">
+        </div>
+      </div>
+      <button class="del-proj" onclick="removeProject(${p})">削除</button>
+    </div>
+    <div class="project-body">
+      <div id="p${p}-task-list"></div>
+      <button class="add-task" onclick="addTask(${p})">＋ 課題（タスク）を追加</button>
+    </div>`;
+  document.getElementById('project-list').appendChild(div);
+  addTask(p);
+}
+
+function removeProject(p) {
+  document.getElementById('project-' + p)?.remove();
+}
+
+function addTask(p) {
+  tCounts[p] = (tCounts[p] || 0) + 1;
+  const t = tCounts[p];
+  const id = `p${p}t${t}`;
+  const div = document.createElement('div');
+  div.className = 'task-card';
+  div.id = 'task-' + id;
+  div.innerHTML = `
+    <div class="task-header">
+      <div class="task-label">課題 ${t}</div>
+      <button class="del" onclick="removeTask('${id}')">削除</button>
+    </div>
+
+    <div class="importance-wrap">
+      <input type="checkbox" id="${id}-important">
+      <label for="${id}-important">⚠ 重要案件（要優先対応）</label>
+    </div>
+
+    <div class="field">
+      <label>タスク名 <span class="req">*</span></label>
+      <input type="text" id="${id}-name" placeholder="例）LP制作・バナー作成">
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">① 対象ページ</div>
+      <div style="margin-bottom:8px">
+        <label>種別（新規 / 既存修正）</label>
+        <div class="radio-row">
+          <label><input type="radio" name="${id}-kind" value="新規"> 新規</label>
+          <label><input type="radio" name="${id}-kind" value="既存修正" checked> 既存修正</label>
+        </div>
+      </div>
+      <div id="${id}-page-list"></div>
+      <button class="add-task" style="margin-top:4px" onclick="addPageRow('${id}')">＋ ページを追加</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">② ステータス</div>
+      <div class="g2">
+        <div>
+          <label>進行状況</label>
+          <select id="${id}-progress">
+            <option value="">選択してください</option>
+            <option>未着手</option>
+            <option>対応中</option>
+            <option>確認待ち</option>
+            <option>保留</option>
+            <option>修正依頼中</option>
+            <option>展開済み</option>
+            <option>公開待ち</option>
+          </select>
+        </div>
+        <div>
+          <label>現在のボール保持者</label>
+          <select id="${id}-ball" onchange="toggleBallOther('${id}')">
+            <option value="">選択してください</option>
+            <option>サウスエージェンシー（自社）</option>
+            <option>発注元</option>
+            <option>仲介企業</option>
+            <option>外注先</option>
+            <option>その他</option>
+          </select>
+          <input type="text" id="${id}-ball-other" placeholder="その他の場合、相手先を入力" style="margin-top:5px;display:none">
+        </div>
+      </div>
+      <div style="margin-top:6px">
+        <label>補足</label>
+        <input type="text" id="${id}-status-note" placeholder="例）球団からのデザイン確認待ち">
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">③ 期限</div>
+      <div class="deadline-wrap">
+        <div class="tbd-wrap">
+          <label><input type="checkbox" id="${id}-tbd" onchange="toggleDeadline('${id}')"> 未定</label>
+        </div>
+        <div>
+          <label>公開予定日</label>
+          <input type="date" id="${id}-deadline">
+        </div>
+        <div>
+          <label>時間（任意）</label>
+          <input type="text" id="${id}-deadline-time" placeholder="例）12:00">
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">④ 状況</div>
+      <div class="g3">
+        <div>
+          <label>テストアップ</label>
+          <div class="radio-row">
+            <label><input type="radio" name="${id}-test" value="済"> 済</label>
+            <label><input type="radio" name="${id}-test" value="未" checked> 未</label>
+          </div>
+        </div>
+        <div>
+          <label>テストアップ予定日</label>
+          <input type="date" id="${id}-test-date">
+        </div>
+        <div>
+          <label>補足</label>
+          <input type="text" id="${id}-detail" placeholder="例）修正中">
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">⑤ 何をしてほしいか <span class="req">*</span></div>
+      <textarea id="${id}-request" placeholder="例）球団確認後、修正対応をお願いします。修正完了後は本番反映まで進めてください。"></textarea>
+    </div>
+
+    <div class="sec" style="margin-bottom:0">
+      <div class="sec-label">⑥ リスク管理</div>
+      <div class="g2">
+        <div>
+          <label>特記事項</label>
+          <input type="text" id="${id}-risk" placeholder="例）修正が複数回入る可能性あり">
+        </div>
+        <div>
+          <label>連絡がない場合の対応方針</label>
+          <input type="text" id="${id}-fallback" placeholder="例）16時までに連絡なければ前回データで進めてOK">
+        </div>
+      </div>
+    </div>`;
+  document.getElementById(`p${p}-task-list`).appendChild(div);
+  addPageRow(`p${p}t${tCounts[p]}`);
+}
+
+function removeTask(id) {
+  document.getElementById('task-' + id)?.remove();
+}
+
+function toggleDeadline(id) {
+  const tbd = document.getElementById(id + '-tbd').checked;
+  document.getElementById(id + '-deadline').disabled = tbd;
+  document.getElementById(id + '-deadline-time').disabled = tbd;
+  if (tbd) {
+    document.getElementById(id + '-deadline').value = '';
+    document.getElementById(id + '-deadline-time').value = '';
+  }
+}
+
+function toggleBallOther(id) {
+  const sel = document.getElementById(id + '-ball');
+  const other = document.getElementById(id + '-ball-other');
+  if (sel && other) other.style.display = sel.value === 'その他' ? 'block' : 'none';
+}
+
+function getBall(id) {
+  const sel = v(id + '-ball');
+  if (sel === 'その他') {
+    const other = v(id + '-ball-other');
+    return other ? 'その他（' + other + '）' : 'その他';
+  }
+  return sel;
+}
+
+function addPageRow(taskId) {
+  pageCounts[taskId] = (pageCounts[taskId] || 0) + 1;
+  const n = pageCounts[taskId];
+  const pid = `${taskId}-pg${n}`;
+  const list = document.getElementById(taskId + '-page-list');
+  if (!list) return;
+
+  const row = document.createElement('div');
+  row.id = 'pagerow-' + pid;
+  row.style.cssText = 'background:#fff;border:1px solid #e4e4e4;border-radius:6px;padding:8px 10px;margin-bottom:6px';
+  row.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:11px;font-weight:700;color:#666">ページ ${n}</span>
+      ${n > 1 ? `<button class="del" onclick="removePageRow('${pid}')">削除</button>` : ''}
+    </div>
+    <div class="g2" style="margin-bottom:6px">
+      <div>
+        <label>ページ構成</label>
+        <select id="${pid}-resp" onchange="togglePageUrl('${pid}')">
+          <option value="responsive">レスポンシブ（1枚）</option>
+          <option value="pc_sp">PC / SP それぞれURL別</option>
+          <option value="sp_only">SPのみ（PCなし）</option>
+          <option value="pc_only">PCのみ（SPなし）</option>
+        </select>
+      </div>
+      <div>
+        <label>ページ名・備考</label>
+        <input type="text" id="${pid}-label" placeholder="例）TOPページ・LP・バナー">
+      </div>
+    </div>
+    <div id="${pid}-url-single">
+      <label>URL</label>
+      <input type="text" id="${pid}-url" placeholder="https://...">
+    </div>
+    <div id="${pid}-url-pcsp" style="display:none" class="g2">
+      <div>
+        <label>PC用URL</label>
+        <input type="text" id="${pid}-url-pc" placeholder="https://... (PC)">
+      </div>
+      <div>
+        <label>SP用URL</label>
+        <input type="text" id="${pid}-url-sp" placeholder="https://... (SP)">
+      </div>
+    </div>`;
+  list.appendChild(row);
+}
+
+function removePageRow(pid) {
+  document.getElementById('pagerow-' + pid)?.remove();
+}
+
+function togglePageUrl(pid) {
+  const type = document.getElementById(pid + '-resp')?.value;
+  const single = document.getElementById(pid + '-url-single');
+  const pcsp = document.getElementById(pid + '-url-pcsp');
+  if (!single || !pcsp) return;
+  if (type === 'pc_sp') {
+    single.style.display = 'none';
+    pcsp.style.display = 'grid';
+  } else {
+    single.style.display = 'block';
+    pcsp.style.display = 'none';
+  }
+}
+
+function getPageData(taskId) {
+  const list = document.getElementById(taskId + '-page-list');
+  if (!list) return [];
+  const rows = list.querySelectorAll('[id^="pagerow-"]');
+  const respLabels = {
+    responsive: 'レスポンシブ（1枚）',
+    pc_sp: 'PC/SP別URL',
+    sp_only: 'SPのみ',
+    pc_only: 'PCのみ'
+  };
+  return [...rows].map(row => {
+    const pid = row.id.replace('pagerow-', '');
+    const resp = v(pid + '-resp');
+    const label = v(pid + '-label');
+    let urlText = '', pcUrl = '', spUrl = '';
+    if (resp === 'pc_sp') {
+      pcUrl = v(pid + '-url-pc') || '未記載';
+      spUrl = v(pid + '-url-sp') || '未記載';
+      urlText = `PC：${pcUrl} / SP：${spUrl}`;
+    } else {
+      urlText = v(pid + '-url') || '未記載';
+    }
+    return { label, resp: respLabels[resp] || resp, urlText, pcUrl, spUrl };
+  });
+}
+
+function hikitsugiGenerate() {
+  const from = v('hk-from');
+  const date = v('hk-date') ? fmtDate(v('hk-date')) : '';
+  const projectEls = [...document.querySelectorAll('.project-card')];
+  const warnings = [];
+
+  if (!from) warnings.push({ item: '引継ぎ者名', detail: '入力されていません' });
+  if (projectEls.length === 0) { alert('案件を1つ以上追加してください'); return; }
+
+  const projects = [];
+  projectEls.forEach(el => {
+    const p = el.id.replace('project-', '');
+    const pName = v(`p${p}-name`);
+    const pTo = v(`p${p}-to`);
+    if (!pName) warnings.push({ item: `案件${p}：案件名`, detail: '入力されていません' });
+    if (!pTo) warnings.push({ item: `案件${p}：引継ぎ先`, detail: '入力されていません' });
+
+    const tasks = [];
+    el.querySelectorAll('.task-card').forEach(tel => {
+      const id = tel.id.replace('task-', '');
+      const tName = v(id + '-name');
+      const request = v(id + '-request');
+      const pages = getPageData(id);
+      const tbd = ck(id + '-tbd');
+      const deadline = tbd ? '未定' : (v(id + '-deadline') ? fmtDate(v(id + '-deadline')) + (v(id + '-deadline-time') ? ' ' + v(id + '-deadline-time') : '') : '');
+
+      if (!tName) warnings.push({ item: `案件「${pName||'未設定'}」課題：タスク名`, detail: '入力されていません' });
+      if (!request) warnings.push({ item: `案件「${pName||'未設定'}」「${tName||'未設定'}」：⑤何をしてほしいか`, detail: '未入力です。引継ぎ先が何をすべきか明記してください' });
+
+      tasks.push({
+        name: tName, important: ck(id + '-important'),
+        pages, kind: radio(id + '-kind'),
+        progress: v(id + '-progress'), ball: getBall(id), statusNote: v(id + '-status-note'),
+        deadline, test: radio(id + '-test'),
+        testDate: v(id + '-test-date') ? fmtDate(v(id + '-test-date')) : '',
+        detail: v(id + '-detail'), request, risk: v(id + '-risk'), fallback: v(id + '-fallback'),
+      });
+    });
+    projects.push({ name: pName, to: pTo, reason: v(`p${p}-reason`), tasks });
+  });
+
+  // 引継ぎ文生成
+  const lines = ['【引継ぎのご連絡】', ''];
+  lines.push(`引継ぎ者：${from || '（未入力）'}`);
+  if (date) lines.push(`日付：${date}`);
+  lines.push('');
+  lines.push('以下の案件の対応をお願いいたします。');
+
+  projects.forEach((proj, pi) => {
+    lines.push('');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push(`■ 案件${pi + 1}：${proj.name || '（未入力）'}`);
+    lines.push(`引継ぎ先：${proj.to || '（未入力）'}　${proj.reason ? '／ 理由：' + proj.reason : ''}`);
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    proj.tasks.forEach((t, ti) => {
+      lines.push('');
+      const importantMark = t.important ? '【⚠ 重要・優先対応】' : '';
+      lines.push(`● 課題${ti + 1}：${t.name || '（未入力）'} ${importantMark}`);
+      lines.push('');
+      lines.push('① 対象ページ');
+      lines.push(`種別：${t.kind || '未選択'}`);
+      if (t.pages && t.pages.length > 0) {
+        t.pages.forEach((pg, pgi) => {
+          const pgLabel = pg.label ? `【${pg.label}】` : `ページ${pgi+1}`;
+          lines.push('');
+          lines.push(pgLabel);
+          if (pg.resp === 'PC/SP別URL') {
+            lines.push('[PC]');
+            lines.push(pg.pcUrl || '未記載');
+            lines.push('[SP]');
+            lines.push(pg.spUrl || '未記載');
+          } else if (pg.resp === 'レスポンシブ（1枚）') {
+            lines.push('[PC/SP]');
+            lines.push(pg.urlText || '未記載');
+          } else if (pg.resp === 'SPのみ') {
+            lines.push('[SP]');
+            lines.push(pg.urlText || '未記載');
+          } else if (pg.resp === 'PCのみ') {
+            lines.push('[PC]');
+            lines.push(pg.urlText || '未記載');
+          } else {
+            lines.push(pg.urlText || '未記載');
+          }
+        });
+      } else {
+        lines.push('　URL：未記載');
+      }
+      lines.push('');
+      lines.push('② ステータス');
+      const statusLine = [t.progress ? '進行状況：' + t.progress : '', t.ball ? 'ボール保持者：' + t.ball : ''].filter(Boolean).join('　');
+      lines.push(`　${statusLine || '未入力'}`);
+      if (t.statusNote) lines.push(`　補足：${t.statusNote}`);
+      lines.push('');
+      lines.push('③ 期限');
+      lines.push(`　公開予定：${t.deadline || '未定'}`);
+      lines.push('');
+      lines.push('④ 状況');
+      lines.push(`　テストアップ：${t.test || '未'}${t.testDate ? '　予定日：' + t.testDate : ''}`);
+      if (t.detail) lines.push(`　補足：${t.detail}`);
+      lines.push('');
+      lines.push('⑤ 依頼内容');
+      lines.push(`　${t.request || '（未入力）'}`);
+      lines.push('');
+      lines.push('⑥ リスク管理');
+      lines.push(`　特記事項：${t.risk || 'なし'}`);
+      lines.push(`　連絡がない場合：${t.fallback || '担当者に確認してください'}`);
+    });
+  });
+
+  lines.push('');
+  lines.push('以上、よろしくお願いいたします。');
+
+  const resultText = lines.join('\n');
+  const resultArea = document.getElementById('result-area');
+  resultArea.style.display = 'block';
+
+  const warnHTML = warnings.length > 0 ? `
+    <div class="warn-section">
+      <div class="warn-title">⚠ 不足項目 ${warnings.length}件</div>
+      ${warnings.map(w => `<div class="warn-item"><span class="warn-badge">未入力</span><div><b>${w.item}</b>　${w.detail}</div></div>`).join('')}
+    </div>` : '';
+
+  resultArea.innerHTML = `
+    ${warnHTML}
+    <div class="result-wrap">
+      <div class="result-top">
+        <div class="result-title">引継ぎ文</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${warnings.length === 0 ? '<span class="ok-badge">チェック完了</span>' : ''}
+          <button class="copy-btn" id="copy-btn" onclick="copyResult()">コピーする</button>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="result-text" id="result-text">${escHtml(resultText)}</div>
+      </div>
+    </div>`;
+
+  resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function copyResult() {
+  navigator.clipboard.writeText(document.getElementById('result-text').textContent).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'コピーしました！';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'コピーする'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+addProject();
+
+</script>
+</body>
+</html>
