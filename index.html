@@ -190,12 +190,13 @@
       </div>
       <div class="field" style="margin-bottom:0;margin-top:12px">
         <label>画面・資料などの画像（任意）</label>
-        <div id="yt-image-wrap" style="border:2px dashed #DDE1E7;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.15s" onclick="document.getElementById('yt-image-input').click()" ondragover="event.preventDefault();this.style.borderColor='#378ADD'" ondragleave="this.style.borderColor='#DDE1E7'" ondrop="handleImageDrop(event)">
-          <div id="yt-image-placeholder" style="font-size:12px;color:#aaa">クリックまたはドラッグ&ドロップで画像をアップロード（PNG・JPG）</div>
-          <img id="yt-image-preview" style="display:none;max-width:100%;max-height:200px;border-radius:6px;margin-top:8px">
-          <button id="yt-image-clear" onclick="clearImage(event)" style="display:none;margin-top:8px;background:none;border:1px solid #ddd;padding:4px 12px;border-radius:6px;font-size:11px;color:#888;cursor:pointer">画像を削除</button>
+        <div id="yt-image-wrap" style="border:2px dashed #DDE1E7;border-radius:8px;padding:14px;transition:all 0.15s" ondragover="event.preventDefault();document.getElementById('yt-image-wrap').style.borderColor='#378ADD'" ondragleave="document.getElementById('yt-image-wrap').style.borderColor='#DDE1E7'" ondrop="handleImageDrop(event,'main')">
+          <div style="text-align:center;cursor:pointer" onclick="document.getElementById('yt-image-input').click()">
+            <div id="yt-image-placeholder" style="font-size:12px;color:#aaa">クリックまたはドラッグ＆ドロップ（PNG・JPG・最大5枚・各3MBまで）</div>
+          </div>
+          <div id="yt-image-previews" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
         </div>
-        <input type="file" id="yt-image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="handleImageSelect(event)">
+        <input type="file" id="yt-image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" multiple onchange="handleImageSelect(event,'main')">
       </div>
     </div>
 
@@ -308,8 +309,8 @@ function fmtDate(val) {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
-async function callGemini(prompt, imageBase64 = null) {
-  const body = imageBase64 ? { prompt, imageBase64 } : { prompt };
+async function callGemini(prompt, images = []) {
+  const body = images.length > 0 ? { prompt, images } : { prompt };
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -320,41 +321,65 @@ async function callGemini(prompt, imageBase64 = null) {
   return d.result;
 }
 
-// 画像関連
-let _imageBase64 = null;
+// 画像関連（複数対応）
+const _images = { main: [], regen: [] };
+const MAX_FILES = 5;
+const MAX_SIZE = 3 * 1024 * 1024; // 3MB
 
-function handleImageSelect(e) {
-  const file = e.target.files[0];
-  if (file) loadImage(file);
+function handleImageSelect(e, slot) {
+  const files = Array.from(e.target.files);
+  addImages(files, slot);
+  e.target.value = '';
 }
 
-function handleImageDrop(e) {
+function handleImageDrop(e, slot) {
   e.preventDefault();
   document.getElementById('yt-image-wrap').style.borderColor = '#DDE1E7';
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) loadImage(file);
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  addImages(files, slot);
 }
 
-function loadImage(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    _imageBase64 = e.target.result;
-    const preview = document.getElementById('yt-image-preview');
-    preview.src = _imageBase64;
-    preview.style.display = 'block';
-    document.getElementById('yt-image-placeholder').style.display = 'none';
-    document.getElementById('yt-image-clear').style.display = 'inline-block';
-  };
-  reader.readAsDataURL(file);
+function addImages(files, slot) {
+  const current = _images[slot] || [];
+  const remaining = MAX_FILES - current.length;
+  if (remaining <= 0) { alert(`画像は最大${MAX_FILES}枚までです`); return; }
+  const toAdd = files.slice(0, remaining);
+  const oversized = toAdd.filter(f => f.size > MAX_SIZE);
+  if (oversized.length > 0) {
+    alert(`3MBを超える画像は追加できません：\n${oversized.map(f=>f.name).join('\n')}`);
+    return;
+  }
+  toAdd.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      _images[slot].push({ base64: ev.target.result, name: file.name });
+      renderPreviews(slot);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
-function clearImage(e) {
-  e.stopPropagation();
-  _imageBase64 = null;
-  document.getElementById('yt-image-preview').style.display = 'none';
-  document.getElementById('yt-image-placeholder').style.display = 'block';
-  document.getElementById('yt-image-clear').style.display = 'none';
-  document.getElementById('yt-image-input').value = '';
+function renderPreviews(slot) {
+  const containerId = slot === 'main' ? 'yt-image-previews' : 'yt-regen-image-previews';
+  const placeholder = slot === 'main' ? 'yt-image-placeholder' : 'yt-regen-image-placeholder';
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  _images[slot].forEach((img, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block';
+    wrap.innerHTML = `
+      <img src="${img.base64}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #E8ECF0">
+      <button onclick="removeImage('${slot}',${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:#E24B4A;color:#fff;border:none;border-radius:50%;font-size:11px;cursor:pointer;line-height:18px;text-align:center;padding:0">×</button>`;
+    container.appendChild(wrap);
+  });
+  const ph = document.getElementById(placeholder);
+  if (ph) ph.style.display = _images[slot].length > 0 ? 'none' : 'block';
+}
+
+function removeImage(slot, idx) {
+  _images[slot].splice(idx, 1);
+  renderPreviews(slot);
 }
 
 function setBtnLoading(id, loading, defaultLabel, retrying = false, messages = []) {
@@ -410,8 +435,8 @@ async function runYaritori(isRegenerate = false, inheritPrev = false) {
   ]);
 
   // 画像のbase64（data:image/...;base64,... 形式）
-  const imageBase64 = _imageBase64 || null;
-  const imageNote = imageBase64 ? '\n【添付画像】画像が添付されています。画面の状態・エラー内容・資料の内容を読み取り、状況の理解と文章生成に活用してください。' : '';
+  const images = (_images[isRegenerate ? 'regen' : 'main'] || []).map(img => img.base64);
+  const imageNote = images.length > 0 ? `\n【添付画像】${images.length}枚の画像が添付されています。画面の状態・エラー内容・資料の内容を読み取り、状況の理解と文章生成に活用してください。` : '';
 
   // 前回結果を加味する場合の追加情報
   const prevNote = (isRegenerate && inheritPrev && _lastResult) ? `\n【前回の生成結果（参考）】\n前回のベスト文章：${_lastResult.best}\n前回のフィードバック：${_lastResult.feedback?.impression || ''}\n今回は追加情報を加味してさらに改善してください。` : '';
@@ -434,7 +459,7 @@ async function runYaritori(isRegenerate = false, inheritPrev = false) {
 {"best":"ベストな文章","feedback":{"positive":"良い点（1文）","caution":"相手が負担に感じる可能性がある点（なければ空文字）","impression":"この文章を受け取った相手の印象（1文）"},"options":[{"label":"バリエーションのラベル（10字以内）","feature":"このアプローチの特徴（1文）","text":"このバリエーションの文章"},{"label":"","feature":"","text":""},{"label":"","feature":"","text":""}]}`;
 
   try {
-    const d = await callGemini(prompt, imageBase64);
+    const d = await callGemini(prompt, images);
     _lastResult = d;
     window._ytOptions = d.options || [];
 
@@ -500,6 +525,16 @@ async function runYaritori(isRegenerate = false, inheritPrev = false) {
     regenArea.innerHTML = `
       <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:10px">情報を追加して再生成</div>
       <textarea id="yt-add-info" rows="2" placeholder="例）先方から追加で〇〇という情報が来ました。これも加味してください。" style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #DDE1E7;border-radius:8px;background:#fff;font-family:inherit;resize:vertical;line-height:1.6;margin-bottom:10px"></textarea>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#666;margin-bottom:6px">追加の画像（任意・最大5枚・各3MBまで）</div>
+        <div id="yt-regen-image-wrap" style="border:2px dashed #DDE1E7;border-radius:8px;padding:12px;transition:all 0.15s" ondragover="event.preventDefault();document.getElementById('yt-regen-image-wrap').style.borderColor='#378ADD'" ondragleave="document.getElementById('yt-regen-image-wrap').style.borderColor='#DDE1E7'" ondrop="handleImageDrop(event,'regen')">
+          <div style="text-align:center;cursor:pointer" onclick="document.getElementById('yt-regen-image-input').click()">
+            <div id="yt-regen-image-placeholder" style="font-size:11px;color:#aaa">クリックまたはドラッグ＆ドロップ</div>
+          </div>
+          <div id="yt-regen-image-previews" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+        </div>
+        <input type="file" id="yt-regen-image-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" multiple onchange="handleImageSelect(event,'regen')">
+      </div>
       <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:8px">前回の生成結果を引き継ぐ？</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button onclick="doRegenerate(true)" style="background:#378ADD;color:#fff;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
@@ -509,6 +544,7 @@ async function runYaritori(isRegenerate = false, inheritPrev = false) {
           ✗ ゼロから再生成
         </button>
       </div>`;
+    _images.regen = [];
 
     const resultEl = document.getElementById('yt-result');
     // 既存の再生成エリアを削除してから追加

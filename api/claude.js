@@ -3,25 +3,27 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { prompt, imageBase64 } = req.body;
+  const { prompt, images } = req.body;
   if (!prompt) {
     return res.status(400).json({ error: 'prompt is required' });
   }
 
   try {
     let content;
-    if (imageBase64) {
-      const match = imageBase64.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (match) {
-        const mediaType = match[1];
-        const data = match[2];
-        content = [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
-          { type: 'text', text: prompt }
-        ];
-      } else {
-        content = prompt;
+
+    if (images && images.length > 0) {
+      // 複数画像対応：画像を先に並べてテキストを最後に
+      content = [];
+      for (const imageBase64 of images) {
+        const match = imageBase64.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+        if (match) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: match[1], data: match[2] }
+          });
+        }
       }
+      content.push({ type: 'text', text: prompt });
     } else {
       content = prompt;
     }
